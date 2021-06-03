@@ -8,7 +8,7 @@ const path = require("path");
 const notificationSound = path.join(__dirname, "sounds/beep.wav");
 
 const defaultInterval = 10; // interval between pings in minutes
-const appointmentsListLimit = 2 // Increase/Decrease it based on the amount of information you want in the notification.
+const appointmentsListLimit = 4 // Increase/Decrease it based on the amount of information you want in the notification.
 const defaultKeepAlive = false;
 let timer = null;
 const sampleUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'
@@ -72,7 +72,9 @@ function checkParams() {
                 appointmentsListLimit: argv.appts || appointmentsListLimit,
                 date: argv.date,
                 pin: argv.pin,
-                keepAlive: argv['keep-alive'] ? argv['keep-alive'].toLowerCase() === 'true' : defaultKeepAlive
+                keepAlive: argv['keep-alive'] ? argv['keep-alive'].toLowerCase() === 'true' : defaultKeepAlive,
+								playNotificationSound: argv.playNotificationSound,
+								minimumSlots: argv.minimumSlots || 1
             }
 
             console.log('\nCowin Pinger started succesfully\n');
@@ -111,7 +113,7 @@ function scheduleCowinPinger(params) {
     }, params.interval * 60000);
 }
 
-function pingCowin({ key, hook, age, districtId, appointmentsListLimit, date, pin, vaccine, dose, keepAlive }) {
+function pingCowin({ key, hook, age, districtId, appointmentsListLimit, date, pin, vaccine, dose, keepAlive, minimumSlots, playNotificationSound }) {
     // get current date on every iteration if not custom date
     date = date || format(new Date(), 'dd-MM-yyyy')
 
@@ -127,7 +129,7 @@ function pingCowin({ key, hook, age, districtId, appointmentsListLimit, date, pi
         if (centers.length) {
             centers.forEach(center => {
                 center.sessions.forEach((session => {
-                    if (session.min_age_limit === ageLimit && session.available_capacity > 0) {
+                    if (session.min_age_limit === ageLimit && session.available_capacity >= minimumSlots) {
                         if (dose === 1 && session.available_capacity_dose1 <= 0) {
                             return;
                         }
@@ -154,8 +156,10 @@ function pingCowin({ key, hook, age, districtId, appointmentsListLimit, date, pi
             if (hook && key) {
                 axios.post(`https://maker.ifttt.com/trigger/${hook}/with/key/${key}`, { value1: dataOfSlot }).then(() => {
                     console.log(dataOfSlot);
-                    sound.play(notificationSound);
-                    console.log('Sent Notification to Phone')
+										if(playNotificationSound){
+											sound.play(notificationSound);
+											console.log('Sent Notification to Phone')
+										}
                     if (!keepAlive) {
                         console.log('Stopping Pinger...')
                         clearInterval(timer);
@@ -163,8 +167,10 @@ function pingCowin({ key, hook, age, districtId, appointmentsListLimit, date, pi
                 });
             } else {
                 console.log(dataOfSlot);
-                sound.play(notificationSound, 1);
-                console.log('Slots found')
+								if(playNotificationSound){
+									sound.play(notificationSound, 1);
+									console.log('Slots found')
+								}
                 if (!keepAlive) {
                     console.log('Stopping Pinger...')
                     clearInterval(timer);
